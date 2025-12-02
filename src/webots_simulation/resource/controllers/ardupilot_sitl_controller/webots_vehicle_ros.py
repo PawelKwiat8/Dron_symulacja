@@ -16,7 +16,7 @@ from threading import Thread
 from typing import List, Union
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2, PointField
 from cv_bridge import CvBridge
 # Here we set up environment variables so we can run this script
 # as an external controller outside of Webots (useful for debugging)
@@ -38,7 +38,7 @@ else:
 os.environ["PYTHONIOENCODING"] = "UTF-8"
 sys.path.append(f"{WEBOTS_HOME}/lib/controller/python")
 
-from controller import Robot, Camera, RangeFinder # noqa: E401, E402
+from controller import Robot, Camera, RangeFinder, Lidar # noqa: E401, E402
 
 
 class WebotsArduVehicleRos():
@@ -61,6 +61,8 @@ class WebotsArduVehicleRos():
                  rangefinder_name: str = None,
                  rangefinder_fps: int = 10,
                  rangefinder_stream_port: int = None,
+                 lidar_name: str = None,
+                 lidar_fps: int = 10,
                  instance: int = 0,
                  motor_velocity_cap: float = float('inf'),
                  reversed_motors: List[int] = None,
@@ -107,6 +109,7 @@ class WebotsArduVehicleRos():
         self.camera_publisher = self.node.create_publisher(Image, 'camera', 10)
         # self.camera_publisher_2 = self.node.create_publisher(Image, 'camera_2', 10)
         self.gps_publisher = self.node.create_publisher(Image, 'gps', 10)
+        self.lidar_publisher = self.node.create_publisher(PointCloud2, 'lidar', 10)
         self.br = CvBridge()
         # setup Webots robot instance
         self.robot = Robot()
@@ -157,6 +160,22 @@ class WebotsArduVehicleRos():
                                                   target=self._handle_image_stream,
                                                   args=[self.rangefinder, rangefinder_stream_port])
                 self._rangefinder_thread.start()
+
+        # init lidar
+        print(f"Lidar name: {lidar_name}")
+        if lidar_name is not None:
+            self.lidar = self.robot.getDevice(lidar_name)
+            if self.lidar is None:
+                print(f"Failed to get Lidar device: {lidar_name}")
+            else:
+                self.lidar.enable(1000//lidar_fps)
+                self.lidar.enablePointCloud()
+                print(f"Lidar {lidar_name} enabled")
+                
+                self._lidar_thread = Thread(daemon=True,
+                                             target=self._handle_lidar_stream,
+                                             args=[self.lidar, lidar_fps])
+                self._lidar_thread.start()
 
         # init motors (and setup velocity control)
         self._motors = [self.robot.getDevice(n) for n in motor_names]
@@ -438,6 +457,56 @@ class WebotsArduVehicleRos():
     #         finally:
     #             # conn.close()
     #             print(f"Camera client disconnected (I{self._instance})")
+
+    def _handle_lidar_stream(self, lidar: Lidar, fps: int):
+        """Stream lidar point cloud to ROS topic"""
+        print("Starting lidar stream thread")
+        time.sleep(2)
+        
+        # Wartości stałe dla PointCloud2
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+        ]
+        
+        while self._webots_connected:
+            start_time = self.robot.getTime()
+            
+            # Pobieramy chmurę punktów jako listę obiektów LidarPoint
+            # Webots 2023a Python API nie wspiera argumentu data_type='buffer'
+            point_cloud = lidar.getPointCloud()
+            
+            if point_cloud:
+                # Konwersja listy obiektów LidarPoint na numpy array
+                # Każdy punkt ma atrybuty x, y, z (float)
+                # To będzie wolniejsze niż buffer, ale zadziała
+                points_list = [[p.x, p.y, p.z] for p in point_cloud]
+                np_points = np.array(points_list, dtype=np.float32)
+                
+                ros_data = np_points.tobytes()
+                
+                msg = PointCloud2()
+                msg.header.stamp = self.node.get_clock().now().to_msg()
+                msg.header.frame_id = "lidar_link"
+                
+                msg.height = 1
+                msg.width = len(np_points)
+                msg.fields = fields
+                msg.is_bigendian = False
+                msg.point_step = 12 # 3 * 4 bytes (float32 * 3)
+                msg.row_step = msg.point_step * msg.width
+                msg.is_dense = False
+                msg.data = ros_data
+                
+                self.lidar_publisher.publish(msg)
+            else:
+                 # print("No lidar data")
+                 pass
+
+            # Czekamy do następnej klatki
+            while self.robot.getTime() - start_time < 1.0/fps:
+                time.sleep(0.001)
 
     def get_camera_gray_image(self) -> np.ndarray:
         """Get the grayscale image from the camera as a numpy array of bytes"""

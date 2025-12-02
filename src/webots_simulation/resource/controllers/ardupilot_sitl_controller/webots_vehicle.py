@@ -35,7 +35,7 @@ else:
 os.environ["PYTHONIOENCODING"] = "UTF-8"
 sys.path.append(f"{WEBOTS_HOME}/lib/controller/python")
 
-from controller import Robot, Camera, RangeFinder # noqa: E401, E402
+from controller import Robot, Camera, RangeFinder, Lidar # noqa: E401, E402
 
 
 class WebotsArduVehicle():
@@ -58,6 +58,8 @@ class WebotsArduVehicle():
                  rangefinder_name: str = None,
                  rangefinder_fps: int = 10,
                  rangefinder_stream_port: int = None,
+                 lidar_name: str = None,
+                 lidar_fps: int = 10,
                  instance: int = 0,
                  motor_velocity_cap: float = float('inf'),
                  reversed_motors: List[int] = None,
@@ -138,6 +140,12 @@ class WebotsArduVehicle():
                                                   target=self._handle_image_stream,
                                                   args=[self.rangefinder, rangefinder_stream_port])
                 self._rangefinder_thread.start()
+
+        # init lidar
+        if lidar_name is not None:
+            self.lidar = self.robot.getDevice(lidar_name)
+            self.lidar.enable(1000//lidar_fps)
+            self.lidar.enablePointCloud()
 
         # init motors (and setup velocity control)
         self._motors = [self.robot.getDevice(n) for n in motor_names]
