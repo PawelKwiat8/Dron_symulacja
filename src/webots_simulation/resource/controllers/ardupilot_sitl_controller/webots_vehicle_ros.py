@@ -463,6 +463,14 @@ class WebotsArduVehicleRos():
         print("Starting lidar stream thread")
         time.sleep(2)
         
+        # Debug info o lidarze
+        print(f"Lidar horizontal resolution: {lidar.getHorizontalResolution()}")
+        print(f"Lidar number of layers: {lidar.getNumberOfLayers()}")
+        print(f"Lidar min range: {lidar.getMinRange()}")
+        print(f"Lidar max range: {lidar.getMaxRange()}")
+        print(f"Lidar FOV: {lidar.getFov()}")
+        print(f"Lidar vertical FOV: {lidar.getVerticalFov()}")
+        
         # Wartości stałe dla PointCloud2
         fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
@@ -470,39 +478,61 @@ class WebotsArduVehicleRos():
             PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
         ]
         
+        frame_count = 0
         while self._webots_connected:
             start_time = self.robot.getTime()
             
             # Pobieramy chmurę punktów jako listę obiektów LidarPoint
-            # Webots 2023a Python API nie wspiera argumentu data_type='buffer'
             point_cloud = lidar.getPointCloud()
             
             if point_cloud:
-                # Konwersja listy obiektów LidarPoint na numpy array
-                # Każdy punkt ma atrybuty x, y, z (float)
-                # To będzie wolniejsze niż buffer, ale zadziała
-                points_list = [[p.x, p.y, p.z] for p in point_cloud]
-                np_points = np.array(points_list, dtype=np.float32)
+                # Filtrujemy punkty nieprawidłowe i bardzo bliskie (0,0,0)
+                min_distance = lidar.getMinRange()
+                points_list = []
+
+                for p in point_cloud:
+                    # Sprawdź czy punkt jest prawidłowy
+                    if (np.isinf(p.x) or np.isinf(p.y) or np.isinf(p.z) or
+                        np.isnan(p.x) or np.isnan(p.y) or np.isnan(p.z)):
+                        continue
+                    
+                    # Oblicz odległość od sensora
+                    dist = np.sqrt(p.x*p.x + p.y*p.y + p.z*p.z)
+                    
+                    # Odfiltruj punkty zbyt bliskie (błędne odczyty) i zerowe
+                    if dist < min_distance or dist < 0.01:
+                        continue
+
+                    # Odfiltruj punkty z górnej półkuli (powyżej horyzontu sensora)
+                    if p.z > 0:
+                        continue
+                    
+                    # Dodaj punkt (bez transformacji - tiltAngle załatwia orientację)
+                    points_list.append([p.x, p.y, p.z])
                 
-                ros_data = np_points.tobytes()
+                # Debug co 50 klatek
+                frame_count += 1
+                if frame_count % 50 == 0:
+                    print(f"Lidar: {len(point_cloud)} raw points, {len(points_list)} valid points")
                 
-                msg = PointCloud2()
-                msg.header.stamp = self.node.get_clock().now().to_msg()
-                msg.header.frame_id = "lidar_link"
-                
-                msg.height = 1
-                msg.width = len(np_points)
-                msg.fields = fields
-                msg.is_bigendian = False
-                msg.point_step = 12 # 3 * 4 bytes (float32 * 3)
-                msg.row_step = msg.point_step * msg.width
-                msg.is_dense = False
-                msg.data = ros_data
-                
-                self.lidar_publisher.publish(msg)
-            else:
-                 # print("No lidar data")
-                 pass
+                if len(points_list) > 0:
+                    np_points = np.array(points_list, dtype=np.float32)
+                    ros_data = np_points.tobytes()
+                    
+                    msg = PointCloud2()
+                    msg.header.stamp = self.node.get_clock().now().to_msg()
+                    msg.header.frame_id = "lidar_link"
+                    
+                    msg.height = 1
+                    msg.width = len(np_points)
+                    msg.fields = fields
+                    msg.is_bigendian = False
+                    msg.point_step = 12
+                    msg.row_step = msg.point_step * msg.width
+                    msg.is_dense = True
+                    msg.data = ros_data
+                    
+                    self.lidar_publisher.publish(msg)
 
             # Czekamy do następnej klatki
             while self.robot.getTime() - start_time < 1.0/fps:
