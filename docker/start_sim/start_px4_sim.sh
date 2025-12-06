@@ -38,7 +38,7 @@ cat > "$CONFIG_FILE" << EOF
       parent = child1
       order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 1: PX4 SITL ---' && docker exec -it knr_drone_px4 bash -c 'pkill -9 px4 2>/dev/null; pkill -9 gz 2>/dev/null; pkill -9 ruby 2>/dev/null; sleep 2; source /opt/ros/jazzy/setup.bash && cd /tools/PX4-Autopilot && make px4_sitl gz_tiltrotor_aruco'; docker exec -it knr_drone_px4 bash"
+      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 1: PX4 SITL ---' && docker exec -it knr_drone_px4 bash -c 'pkill -9 px4 2>/dev/null; pkill -9 gz 2>/dev/null; pkill -9 ruby 2>/dev/null; sleep 2; cd /tools/PX4-Autopilot && make px4_sitl gz_tiltrotor_aruco'; docker exec -it knr_drone_px4 bash"
     [[[child2]]]
       type = VPaned
       parent = child1
@@ -63,12 +63,24 @@ cat > "$CONFIG_FILE" << EOF
       order = 0
       profile = default
       command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 3: ROS2 drone_handler_px4 ---' && echo 'Czekam 25s na MicroXRCE...' && sleep 25 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && cd ~/ros_ws && source install/setup.bash && ros2 run drone_hardware drone_handler_px4'; docker exec -it knr_drone_px4 bash"
-    [[[terminal_shell]]]
-      type = Terminal
+    [[[child4]]]
+      type = VPaned
       parent = child3
       order = 1
+      position = 250
+      ratio = 0.5
+    [[[terminal_bridge]]]
+      type = Terminal
+      parent = child4
+      order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: Shell ---' && sleep 5 && docker exec -it knr_drone_px4 bash -c 'cd ~/ros_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && exec bash'"
+      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: ROS GZ Bridge ---' && echo 'Czekam 30s...' && sleep 30 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && ros2 run ros_gz_bridge parameter_bridge /lidar/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked --ros-args -r /lidar/points:=/lidar'; docker exec -it knr_drone_px4 bash"
+    [[[terminal_shell]]]
+      type = Terminal
+      parent = child4
+      order = 1
+      profile = default
+      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 5: Shell ---' && sleep 5 && docker exec -it knr_drone_px4 bash -c 'cd ~/ros_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && exec bash'"
 EOF
 
 echo "Uruchamianie kontenera knr_drone_px4..."
