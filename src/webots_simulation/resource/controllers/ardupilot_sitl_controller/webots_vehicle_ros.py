@@ -486,28 +486,26 @@ class WebotsArduVehicleRos():
             point_cloud = lidar.getPointCloud()
             
             if point_cloud:
-                # Filtrujemy punkty nieprawidłowe i bardzo bliskie (0,0,0)
-                min_distance = lidar.getMinRange()
+                # Filtrujemy tylko punkty nieprawidłowe (inf/nan) i powyżej 6° nad horyzontem
+                # Lidar wysyła surowe dane - bez filtrowania bliskich punktów
                 points_list = []
+                
+                # tan(6°) ≈ 0.1051 - próg dla filtrowania górnej półkuli
+                tan_6_deg = 0.1051
 
                 for p in point_cloud:
-                    # Sprawdź czy punkt jest prawidłowy
+                    # Sprawdź czy punkt jest prawidłowy (tylko inf/nan)
                     if (np.isinf(p.x) or np.isinf(p.y) or np.isinf(p.z) or
                         np.isnan(p.x) or np.isnan(p.y) or np.isnan(p.z)):
                         continue
                     
-                    # Oblicz odległość od sensora
-                    dist = np.sqrt(p.x*p.x + p.y*p.y + p.z*p.z)
-                    
-                    # Odfiltruj punkty zbyt bliskie (błędne odczyty) i zerowe
-                    if dist < min_distance or dist < 0.01:
-                        continue
-
-                    # Odfiltruj punkty z górnej półkuli (powyżej horyzontu sensora)
-                    if p.z > 0:
+                    # Odfiltruj punkty powyżej 6° nad horyzontem
+                    # Warunek: z > tan(6°) * sqrt(x² + y²)
+                    dist_horizontal = np.sqrt(p.x*p.x + p.y*p.y)
+                    if p.z > tan_6_deg * dist_horizontal:
                         continue
                     
-                    # Dodaj punkt (bez transformacji - tiltAngle załatwia orientację)
+                    # Dodaj punkt (surowe dane bez filtrowania odległości)
                     points_list.append([p.x, p.y, p.z])
                 
                 # Debug co 50 klatek
