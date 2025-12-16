@@ -74,7 +74,7 @@ cat > "$CONFIG_FILE" << EOF
       parent = child4
       order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: ROS GZ Bridge ---' && echo 'Czekam 30s...' && sleep 30 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && ros2 run ros_gz_bridge parameter_bridge /lidar/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked --ros-args -r /lidar/points:=/lidar'; docker exec -it knr_drone_px4 bash"
+      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: ROS GZ Bridge (Launch) ---' && echo 'Czekam 30s...' && sleep 30 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && ros2 launch /root/ros_ws/src/drone_bringup/launch/bridge_px4.launch.py'; docker exec -it knr_drone_px4 bash"
     [[[terminal_shell]]]
       type = Terminal
       parent = child4

@@ -58,15 +58,16 @@ DEF Iris IrisSimple {
     #    - Promienie w dół (nóżki, ziemia) są nienaruszone.
     #    - Promienie poziome (horyzont) przechodzą przez szczelinę.
     Lidar {
-      translation 0 0 -0.18
+      translation 0 0 -0.25
       rotation 0 0 1 0
       name "Lidar"
       horizontalResolution 180
       fieldOfView 6.28318
       verticalFieldOfView 3.14159
       numberOfLayers 30
-      minRange 0.2
-      maxRange 20
+      minRange 0.05
+      maxRange 30
+      noise 0.02
     }
 
     DEF camera Camera {
