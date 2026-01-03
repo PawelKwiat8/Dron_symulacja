@@ -46,7 +46,7 @@ DEF Iris IrisSimple {
     "--lidar"
     "Lidar"
     "--lidar-fps"
-    "5"
+    "50"
   ]
   extensionSlot [
     Lidar {
