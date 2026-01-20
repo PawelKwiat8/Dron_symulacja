@@ -38,7 +38,7 @@ cat > "$CONFIG_FILE" << EOF
       parent = child1
       order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 1: PX4 SITL ---' && docker exec -it knr_drone_px4 bash -c 'pkill -9 px4 2>/dev/null; pkill -9 gz 2>/dev/null; pkill -9 ruby 2>/dev/null; sleep 2; cd /tools/PX4-Autopilot && make px4_sitl gz_tiltrotor_aruco'; docker exec -it knr_drone_px4 bash"
+      command = bash -c "cd $WORKSPACE_DIR/KNR_Drone_PX4_Autopilot && echo '--- Panel 1: PX4 SITL (Host) ---' && pkill -9 px4 2>/dev/null; pkill -9 gz 2>/dev/null; pkill -9 ruby 2>/dev/null; sleep 2; make px4_sitl gz_tiltrotor_aruco; exec bash"
     [[[child2]]]
       type = VPaned
       parent = child1
@@ -50,7 +50,7 @@ cat > "$CONFIG_FILE" << EOF
       parent = child2
       order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 2: MicroXRCEAgent ---' && echo 'Czekam 15s na PX4 SITL...' && sleep 15 && docker exec -it knr_drone_px4 bash -c 'pkill -9 MicroXRCEAgent 2>/dev/null; sleep 1; source /opt/ros/jazzy/setup.bash && source ~/ros_ws/install/setup.bash && MicroXRCEAgent udp4 -p 8888'; docker exec -it knr_drone_px4 bash"
+      command = bash -c "cd $WORKSPACE_DIR && echo '--- Panel 2: MicroXRCEAgent ---' && echo 'Czekam 5s na PX4 SITL...' && sleep 5 && docker exec -it knr_drone_px4 bash -c 'pkill -f MicroXRCEAgent 2>/dev/null; source /opt/ros/jazzy/setup.bash && source ~/ros_ws/install/setup.bash && MicroXRCEAgent udp4 -p 8888'; echo 'Proces zakończony/przerwany. Wchodzę do Shella (ROS sourced)...'; docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && source ~/ros_ws/install/setup.bash && exec bash'"
     [[[child3]]]
       type = VPaned
       parent = child2
@@ -62,32 +62,24 @@ cat > "$CONFIG_FILE" << EOF
       parent = child3
       order = 0
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 3: ROS2 drone_handler_px4 ---' && echo 'Czekam 25s na MicroXRCE...' && sleep 25 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && cd ~/ros_ws && source install/setup.bash && ros2 run drone_hardware drone_handler_px4'; docker exec -it knr_drone_px4 bash"
-    [[[child4]]]
-      type = VPaned
-      parent = child3
-      order = 1
-      position = 250
-      ratio = 0.5
-    [[[terminal_bridge]]]
-      type = Terminal
-      parent = child4
-      order = 0
-      profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: ROS GZ Bridge (Launch) ---' && echo 'Czekam 30s...' && sleep 30 && docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && ros2 launch /root/ros_ws/src/drone_bringup/launch/bridge_px4.launch.py'; docker exec -it knr_drone_px4 bash"
+      command = bash -c "cd $WORKSPACE_DIR && echo '--- Panel 3: ROS2 drone_handler_px4 ---' && echo 'Czekam 10s na MicroXRCE...' && sleep 10 && docker exec -it knr_drone_px4 bash -c 'pkill -f drone_handler_px4 2>/dev/null; source /opt/ros/jazzy/setup.bash && cd ~/ros_ws && source install/setup.bash && ros2 run drone_hardware drone_handler_px4'; echo 'Proces zakończony/przerwany. Wchodzę do Shella (ROS sourced)...'; docker exec -it knr_drone_px4 bash -c 'source /opt/ros/jazzy/setup.bash && source ~/ros_ws/install/setup.bash && exec bash'"
     [[[terminal_shell]]]
       type = Terminal
-      parent = child4
+      parent = child3
       order = 1
       profile = default
-      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 5: Shell ---' && sleep 5 && docker exec -it knr_drone_px4 bash -c 'cd ~/ros_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && exec bash'"
+      command = bash -c "cd $WORKSPACE_DIR/docker && echo '--- Panel 4: Shell ---' && sleep 5 && docker exec -it knr_drone_px4 bash -c 'cd ~/ros_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && exec bash'"
 EOF
 
 echo "Uruchamianie kontenera knr_drone_px4..."
 docker start knr_drone_px4
 
-echo "Uruchamianie QGroundControl..."
-"$DIR/QGroundControl-x86_64.AppImage" &
+if pgrep -f "QGroundControl" > /dev/null; then
+    echo "QGroundControl już działa - pomijam uruchamianie."
+else
+    echo "Uruchamianie QGroundControl..."
+    "$DIR/QGroundControl-x86_64.AppImage" &
+fi
 
 echo "Uruchamianie Terminatora..."
 terminator -u -g "$CONFIG_FILE" -l px4_sim
